@@ -15,15 +15,16 @@ pub struct DupFinder {
 }
 
 impl DupFinder {
-  pub fn find<P: 'static + Send + AsRef<Path>>(&mut self, path: P) {
+  pub fn find<P: AsRef<Path>>(&mut self, path: P) {
     let (paths_in, paths_out) = channel::bounded::<PathBuf>(THREADS);
     let (hashes_in, hashes_out) = channel::bounded::<(PathBuf, u64)>(THREADS);
 
     // producer
-    thread::spawn(move || {
-      helpers::traverse(path, &move |path| {
+    thread::spawn({
+      let path = path.as_ref().to_owned();
+      move || helpers::traverse(path, &move |path| {
         paths_in.send(path).unwrap();
-      });
+      })
     });
 
     // workers
@@ -40,10 +41,8 @@ impl DupFinder {
       });
     }
 
-    drop(paths_out);
-    drop(hashes_in);
-
     // consumer
+    drop(hashes_in);
     while let Ok((path, hash)) = hashes_out.recv() {
       self.insert(path, hash);
     }
