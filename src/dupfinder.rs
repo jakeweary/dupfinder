@@ -2,7 +2,6 @@ use crate::helpers;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 use std::thread;
 use crossbeam::channel;
 
@@ -16,24 +15,19 @@ pub struct DupFinder {
 }
 
 impl DupFinder {
-  pub fn find<P: AsRef<Path>>(self, path: P) {
-    let state = Arc::new(Mutex::new(self));
+  pub fn find<P: 'static + Send + AsRef<Path>>(&mut self, path: P) {
     let (paths_in, paths_out) = channel::bounded::<PathBuf>(THREADS);
     let (hashes_in, hashes_out) = channel::bounded::<(PathBuf, u64)>(THREADS);
-    let mut threads = vec![];
 
-    // consumer
-    threads.push({
-      let state = state.clone();
-      thread::spawn(move || {
-        while let Ok((path, hash)) = hashes_out.recv() {
-          state.lock().unwrap().insert(path, hash);
-        }
-      })
+    // producer
+    thread::spawn(move || {
+      helpers::traverse(path, &move |path| {
+        paths_in.send(path).unwrap();
+      });
     });
 
     // workers
-    threads.extend((0..THREADS).map(|_| {
+    for _ in 0..THREADS {
       let paths_out = paths_out.clone();
       let hashes_in = hashes_in.clone();
       thread::spawn(move || {
@@ -43,21 +37,18 @@ impl DupFinder {
             hashes_in.send((path, hash)).unwrap();
           }
         }
-      })
-    }));
-
-    // producer
-    helpers::traverse(path, &move |path| {
-      paths_in.send(path).unwrap();
-    });
+      });
+    }
 
     drop(paths_out);
     drop(hashes_in);
-    for t in threads {
-      t.join().unwrap();
+
+    // consumer
+    while let Ok((path, hash)) = hashes_out.recv() {
+      self.insert(path, hash);
     }
 
-    state.lock().unwrap().show_stats();
+    self.show_stats();
   }
 
   fn insert(&mut self, path: PathBuf, hash: u64) {
