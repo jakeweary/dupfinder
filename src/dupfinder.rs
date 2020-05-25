@@ -1,5 +1,5 @@
 use crate::helpers;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::thread;
@@ -9,8 +9,7 @@ const THREADS: usize = 8;
 
 #[derive(Default)]
 pub struct DupFinder {
-  dupes:  HashSet<u64>,
-  hashes: HashSet<u64>,
+  hashes: HashMap<u64, bool>,
   hashed: HashMap<PathBuf, u64>,
 }
 
@@ -51,20 +50,23 @@ impl DupFinder {
   }
 
   fn insert(&mut self, path: PathBuf, hash: u64) {
-    if self.hashes.contains(&hash) {
-      self.dupes.insert(hash);
-      println!("\x1b[0;33m{}\x1b[0m", path.to_string_lossy());
-    }
-    else {
-      self.hashes.insert(hash);
-      println!("\x1b[0;34m{}\x1b[0m", path.to_string_lossy());
-    }
+    self.hashes.entry(hash)
+      .and_modify(|is_dupe| {
+        println!("\x1b[0;33m{}\x1b[0m", path.to_string_lossy());
+        *is_dupe = true;
+      })
+      .or_insert_with(|| {
+        println!("\x1b[0;34m{}\x1b[0m", path.to_string_lossy());
+        false
+      });
+
     self.hashed.insert(path, hash);
   }
 
   fn show_results(&self) {
-    let mut dupes = self.dupes.iter()
-      .map(|hash| (hash, Vec::<&PathBuf>::new()))
+    let mut dupes = self.hashes.iter()
+      .filter(|(_, &is_dupe)| is_dupe)
+      .map(|(hash, _)| (hash, Vec::<&PathBuf>::new()))
       .collect::<HashMap<_, _>>();
 
     for (path, hash) in &self.hashed {
