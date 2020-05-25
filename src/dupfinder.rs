@@ -11,7 +11,7 @@ const THREADS: usize = 8;
 pub struct DupFinder {
   dupes:  HashSet<u64>,
   hashes: HashSet<u64>,
-  paths:  HashMap<PathBuf, u64>,
+  hashed: HashMap<PathBuf, u64>,
 }
 
 impl DupFinder {
@@ -22,7 +22,7 @@ impl DupFinder {
     // producer
     thread::spawn({
       let path = path.as_ref().to_owned();
-      move || helpers::traverse(path, &move |path| {
+      move || helpers::traverse(path, &|path| {
         paths_in.send(path).unwrap();
       })
     });
@@ -47,7 +47,7 @@ impl DupFinder {
       self.insert(path, hash);
     }
 
-    self.show_stats();
+    self.show_results();
   }
 
   fn insert(&mut self, path: PathBuf, hash: u64) {
@@ -59,15 +59,15 @@ impl DupFinder {
       self.hashes.insert(hash);
       println!("\x1b[0;34m{}\x1b[0m", path.to_string_lossy());
     }
-    self.paths.insert(path, hash);
+    self.hashed.insert(path, hash);
   }
 
-  fn show_stats(&self) {
+  fn show_results(&self) {
     let mut dupes = self.dupes.iter()
       .map(|hash| (hash, Vec::<&PathBuf>::new()))
       .collect::<HashMap<_, _>>();
 
-    for (path, hash) in &self.paths {
+    for (path, hash) in &self.hashed {
       dupes.entry(&hash)
         .and_modify(|paths| paths.push(path));
     }
