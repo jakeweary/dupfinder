@@ -83,5 +83,10 @@ impl DupFinder {
         println!("\x1b[0;33m{}\x1b[0m in \x1b[0;34m{}\x1b[0m", name, path);
       }
     }
+
+    println!();
+    println!("{} files hashed", self.hashed.len());
+    println!("{} hashes point to a single file", self.hashes.len());
+    println!("{} hashes point to multiple files", dupes.len());
   }
 }
