@@ -4,6 +4,20 @@ use std::hash::Hasher;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 
+pub fn human_readable(bytes: u64) -> String {
+  let bytes = bytes as f64;
+  let power = (bytes.log2() / 10.0).max(0.0);
+  match power as usize {
+    0 => format!("{} B", bytes),
+    p => {
+      let norm = bytes * 2.0_f64.powf(-10.0 * power.floor());
+      let symbol = b" KMGTPEZY"[p] as char;
+      let digits = 3 - norm.log10() as usize;
+      format!("{:.2$} {}iB", norm, symbol, digits)
+    }
+  }
+}
+
 pub fn hash_file(file: &mut File) -> u64 {
   let mut hasher = DefaultHasher::new();
   let mut buffer = [0; 1<<17];
